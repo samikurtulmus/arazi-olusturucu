@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>YapiLabCadTools</RootNamespace>
+    <AssemblyName>YapiLabCadTools</AssemblyName>
+    <Version>1.0.0</Version>
+    <Company>YapıLab</Company>
+    <Product>YapıLab CAD Tools</Product>
+    <Description>Koordinat listelerinden kapalı polyline üreten AutoCAD eklentisi.</Description>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- CS1591: missing XML comment warnings are too noisy for UI designer-style code. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Compile-time references only: at runtime AutoCAD (2025/2026/2027) provides these
+         assemblies, so nothing from this package may be copied to the output folder. -->
+    <PackageReference Include="AutoCAD.NET" Version="25.0.1">
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>

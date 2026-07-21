@@ -1,0 +1,27 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.9.34310.174
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "YapiLabCadTools", "src\YapiLabCadTools\YapiLabCadTools.csproj", "{5B8E4C1A-2F3D-4E6B-9C7A-1D0F2A3B4C5D}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "YapiLabCadTools.Tests", "tests\YapiLabCadTools.Tests\YapiLabCadTools.Tests.csproj", "{7C2D5E3B-4A1F-4B8C-8D9E-2E1A3B4C5D6E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{5B8E4C1A-2F3D-4E6B-9C7A-1D0F2A3B4C5D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5B8E4C1A-2F3D-4E6B-9C7A-1D0F2A3B4C5D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5B8E4C1A-2F3D-4E6B-9C7A-1D0F2A3B4C5D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5B8E4C1A-2F3D-4E6B-9C7A-1D0F2A3B4C5D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7C2D5E3B-4A1F-4B8C-8D9E-2E1A3B4C5D6E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7C2D5E3B-4A1F-4B8C-8D9E-2E1A3B4C5D6E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7C2D5E3B-4A1F-4B8C-8D9E-2E1A3B4C5D6E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7C2D5E3B-4A1F-4B8C-8D9E-2E1A3B4C5D6E}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
