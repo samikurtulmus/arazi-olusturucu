@@ -8,7 +8,7 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <RootNamespace>YapiLabCadTools</RootNamespace>
     <AssemblyName>YapiLabCadTools</AssemblyName>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <Company>YapıLab</Company>
     <Product>YapıLab CAD Tools</Product>
     <Description>Koordinat listelerinden kapalı polyline üreten AutoCAD eklentisi.</Description>

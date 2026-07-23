@@ -9,7 +9,7 @@
     AutodeskProduct="AutoCAD"
     ProductType="Application"
     Name="YapiLab CAD Tools"
-    AppVersion="1.0.0"
+    AppVersion="1.1.0"
     Description="Koordinat listelerinden ve TKGM parsel sorgu JSON çıktılarından tek tıkla parsel çizimi."
     Author="YapıLab"
     ProductCode="{8F4E2C1A-7B3D-4A9E-9C5F-2D6E8A0B1C3D}"

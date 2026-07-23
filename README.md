@@ -10,54 +10,53 @@ Elinizdeki koordinat listesini (Excel, tapu/kadastro çıktısı, TXT, CSV — h
 
 ## 📥 Kurulum (derleme gerekmez)
 
-Bu bölüm hiç kod bilmeyen, sadece AutoCAD kullanan mimar/mühendis arkadaşlar için yazıldı. Beş dakika sürer.
+Bu bölüm hiç kod bilmeyen, sadece AutoCAD kullanan mimar/mühendis arkadaşlar için yazıldı. İki dakika sürer ve AutoCAD her açıldığında eklenti **kendiliğinden** yüklenir — `NETLOAD`, `APPLOAD` gibi komutlarla uğraşmazsınız.
 
-### 1) DLL dosyasını indirin
+### 1) ZIP paketini indirin
 
-**[⬇ YapiLabCadTools.dll indir](../../releases/latest/download/YapiLabCadTools.dll)**
+**[⬇ YapiLabCadTools.zip indir](../../releases/latest/download/YapiLabCadTools.zip)**
 
 (Bu link her zaman en güncel sürümü indirir. Alternatif olarak [Releases](../../releases) sayfasından da indirebilirsiniz.)
 
-İndirdiğiniz dosyayı kolayca bulacağınız sabit bir klasöre koyun, örneğin:
+> **Windows uyarısı çıkarsa:** İndirilen ZIP'e sağ tıklayıp **Özellikler**'i açın, alt kısımda "Bu dosya başka bir bilgisayardan geldi, engellemeyi kaldır" gibi bir kutu varsa işaretleyip **Tamam**'a basın. Bu, internetten indirilen dosyalar için Windows'un standart bir uyarısıdır, dosyayla ilgili bir sorun değildir.
+
+### 2) Klasörü yerine kopyalayın
+
+1. ZIP'i açın — içinden `YapiLabCadTools.bundle` adlı bir klasör çıkacak.
+2. Windows'ta adres çubuğuna `%AppData%\Autodesk\ApplicationPlugins` yazıp **Enter**'a basın (klasör yoksa oluşturun).
+3. `YapiLabCadTools.bundle` klasörünü olduğu gibi oraya kopyalayın.
+
+### 3) AutoCAD'i açın — bitti
+
+AutoCAD'i (yeniden) başlatın. Eklenti otomatik yüklenir; komut satırında "YapıLab CAD Tools yüklendi" mesajını görürsünüz. Pencereyi açmak için:
 
 ```
-C:\YapiLab\YapiLabCadTools.dll
+YAPILAB        (kısayolu: YL)
 ```
 
-> **Windows uyarısı çıkarsa:** İndirilen dosyaya sağ tıklayıp **Özellikler**'i açın, alt kısımda "Bu dosya başka bir bilgisayardan geldi, engellemeyi kaldır" gibi bir kutu varsa işaretleyip **Tamam**'a basın. Bu, internetten indirilen dosyalar için Windows'un standart bir uyarısıdır, dosyayla ilgili bir sorun değildir.
+**Kaldırmak isterseniz:** aynı `ApplicationPlugins` klasöründeki `YapiLabCadTools.bundle` klasörünü silmeniz yeterli.
 
-### 2) AutoCAD'e yükleyin
+<details>
+<summary>Alternatif: tek DLL ile elle yükleme (NETLOAD)</summary>
 
-1. AutoCAD'i açın.
-2. Komut satırına `NETLOAD` yazıp **Enter**'a basın.
-3. Açılan pencereden 1. adımda indirdiğiniz `YapiLabCadTools.dll` dosyasını seçin.
-4. Komut satırına `YAPILAB` yazıp **Enter**'a basın (kısayolu: `YL`).
+Otomatik yükleme istemiyorsanız [Releases](../../releases) sayfasından `YapiLabCadTools.dll` dosyasını indirin, AutoCAD'de `NETLOAD` komutuyla seçin ve `YAPILAB` yazın. Bu yöntemde DLL'i her AutoCAD açılışında yeniden yüklemeniz gerekir (ya da `APPLOAD` → Startup Suite'e ekleyebilirsiniz).
 
-Karşınıza koordinat penceresi açılacak. Bu kadar — kurulum bitti.
-
-### 3) Her AutoCAD açılışında otomatik yüklensin
-
-Yukarıdaki `NETLOAD` adımını her seferinde tekrar etmemek için:
-
-1. Komut satırına `APPLOAD` yazın.
-2. **Startup Suite** (Başlangıç Takımı) bölümüne `YapiLabCadTools.dll` dosyasını ekleyin.
-
-Bundan sonra AutoCAD her açıldığında eklenti otomatik yüklenir, sadece `YAPILAB` yazmanız yeterli olur.
+</details>
 
 ### Gereksinimler
 
 | | |
 |---|---|
 | AutoCAD | **2025, 2026 veya 2027** (daha eski sürümler desteklenmez) |
-| Ekstra kurulum | **Yok** — DLL tek başına çalışır, ek bir program/kütüphane kurmanıza gerek yok |
+| Ekstra kurulum | **Yok** — ek bir program/kütüphane kurmanıza gerek yok |
 
 ---
 
 ## 🖊 Kullanım
 
 1. Koordinatları Excel'den, tapu/kadastro çıktısından veya herhangi bir metin dosyasından kopyalayın.
-2. Arazi Oluşturucu penceresinde **Ctrl+V** ile yapıştırın (ya da TXT/CSV dosyasını pencereye sürükleyin / **Dosya Aç**'ı kullanın).
-3. Alttaki **Önizleme**'de nokta sayısını, alanı ve çevreyi kontrol edin.
+2. Arazi Oluşturucu penceresinde **Ctrl+V** ile yapıştırın (ya da TXT/CSV/JSON dosyasını pencereye sürükleyin / **Dosya Aç**'ı kullanın).
+3. Sağdaki **Önizleme**'de nokta sayısını, alanı, çevreyi ve şekil sayısını kontrol edin.
 4. **ÇİZ**'e tıklayın.
 
 Bir hücre yanlış görünüyorsa (kırmızı), üzerine gelince sebebini gösterir; tablo üzerinde elle düzeltebilirsiniz. Format yanlış algılandıysa araç çubuğundaki **Format** listesinden doğru sırayı elle seçin.
@@ -73,6 +72,8 @@ Bir hücre yanlış görünüyorsa (kırmızı), üzerine gelince sebebini göst
   ...
   ```
   Bu tür bir liste yapıştırıldığında program otomatik olarak tanır ve çizim için gereken **UTM metre** koordinatlarına çevirir — elle hiçbir dönüşüm yapmanıza gerek yoktur.
+- **TKGM parsel sorgu JSON çıktısı:** [parselsorgu.tkgm.gov.tr](https://parselsorgu.tkgm.gov.tr) benzeri servislerden alınan GeoJSON dosyasını olduğu gibi pencereye sürükleyin ya da içeriğini yapıştırın — parsel sınırı ve içindeki yapılar otomatik ayrıştırılır. Birden fazla parsel içeren dosyalar da desteklenir.
+- **Çoklu şekil:** Nokta numarası yeniden 1'den başlayan listeler (parsel sınırı + yapı taban çizimleri gibi) otomatik olarak ayrı kapalı polyline'lara bölünür; ana sınır `PARSEL`, diğer şekiller `YAPI` katmanına çizilir. Gruplar tabloda renk bandıyla gösterilir.
 - **Ayraçlar:** Tab, virgül, noktalı virgül, boşluk — hepsi otomatik tanınır.
 - **Ondalık ayraç:** Hem `4423456,78` hem `4423456.78` çalışır.
 
