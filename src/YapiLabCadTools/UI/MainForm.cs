@@ -22,12 +22,14 @@ namespace YapiLabCadTools.UI
     {
         private const int MaxUndoDepth = 25;
         private const int PreviewDebounceMs = 300;
+        private const int SidebarWidth = 360;
 
         private readonly ICoordinateParser _parser;
         private readonly IDrawingService _drawingService;
         private readonly IFileService _fileService;
 
         private List<PointRow> _rows = new();
+        private int[] _groupIndexes = Array.Empty<int>();
         private readonly List<List<PointRow>> _undoStack = new();
         private string? _rawText;
         private FormatInfo? _lastFormat;
@@ -51,6 +53,7 @@ namespace YapiLabCadTools.UI
         private Button _drawButton = null!;
         private Label _resultLabel = null!;
         private readonly Timer _previewTimer = new() { Interval = PreviewDebounceMs };
+        private readonly Timer _windowStateTimer = new() { Interval = 400 };
 
         public MainForm(ICoordinateParser parser, IDrawingService drawingService, IFileService fileService)
         {
@@ -65,6 +68,98 @@ namespace YapiLabCadTools.UI
                 UpdatePreview();
             };
             UpdatePreview();
+
+            // Sizing is deliberately NOT driven by a fixed design-time constant plus
+            // AutoScaleMode.Dpi's automatic scale-up: in AutoCAD's hosted, per-monitor-DPI
+            // process that multiplication has proven unpredictable in practice (a modest
+            // constant has come out both too small and, after "fixing" that, far too large).
+            // Instead every size decision below is taken from Screen.WorkingArea — the real,
+            // measured screen the window is actually opening on — so nothing depends on
+            // predicting how the framework's DPI scaling behaves in this host.
+            //
+            // The form is rebuilt from scratch on every AutoCAD session/NETLOAD, so without the
+            // restore it forgets any size the user dragged it to and reopens at the default
+            // every time.
+            Load += (_, _) =>
+            {
+                if (!WindowStateStore.TryRestore(this))
+                {
+                    ApplyDefaultSize();
+                }
+
+                ClampToWorkingArea();
+            };
+
+            // The screen Load sees isn't always the one the window ends up centered/placed on
+            // (final placement happens slightly later in the Show pipeline); re-checking once
+            // more after the window is actually visible catches that edge case cheaply.
+            Shown += (_, _) => ClampToWorkingArea();
+
+            _windowStateTimer.Tick += (_, _) =>
+            {
+                _windowStateTimer.Stop();
+                WindowStateStore.Save(this);
+            };
+
+            // Passive only: shrink back only if the window is genuinely bigger than the screen
+            // it's on. This must never actively fight a resize in progress — an earlier version
+            // tried to repeatedly re-assert a remembered "correct" size for a few seconds after
+            // open, and that fought the user's own manual drag-resize too (a resize attempt could
+            // get silently reverted within a few hundred ms, making the window feel impossible to
+            // enlarge). Whatever the original oversizing cause was, undoing the user's own actions
+            // is worse, so this only ever caps genuine overflow, never re-imposes a target.
+            Resize += (_, _) =>
+            {
+                ClampToWorkingArea();
+                ScheduleWindowStateSave();
+            };
+            Move += (_, _) => ScheduleWindowStateSave();
+            FormClosing += (_, _) => WindowStateStore.Save(this);
+        }
+
+        private void ScheduleWindowStateSave()
+        {
+            if (WindowState == FormWindowState.Minimized)
+            {
+                return;
+            }
+
+            _windowStateTimer.Stop();
+            _windowStateTimer.Start();
+        }
+
+        /// <summary>
+        /// First-run size: a comfortable fraction of the real screen's working area, capped at a
+        /// sane absolute maximum — not a fixed pixel constant, so nothing depends on predicting
+        /// how AutoScaleMode.Dpi's scale-up behaves in this AutoCAD-hosted process.
+        /// </summary>
+        private void ApplyDefaultSize()
+        {
+            Rectangle working = Screen.FromControl(this).WorkingArea;
+            int width = Math.Clamp((int)(working.Width * 0.55), MinimumSize.Width, 1100);
+            int height = Math.Clamp((int)(working.Height * 0.70), MinimumSize.Height, 820);
+            Size = new Size(width, height);
+            CenterToScreen();
+        }
+
+        /// <summary>
+        /// Hard, unconditional safety net: the window can never end up bigger than the screen
+        /// it is actually opening on, whether the cause is DPI auto-scaling, a size restored
+        /// from a different/bigger monitor, or anything else.
+        /// </summary>
+        private void ClampToWorkingArea()
+        {
+            Rectangle working = Screen.FromControl(this).WorkingArea;
+            int width = Math.Min(Width, working.Width);
+            int height = Math.Min(Height, working.Height);
+            if (width != Width || height != Height)
+            {
+                Size = new Size(width, height);
+            }
+
+            int x = Math.Max(working.Left, Math.Min(Left, working.Right - Width));
+            int y = Math.Max(working.Top, Math.Min(Top, working.Bottom - Height));
+            Location = new Point(x, y);
         }
 
         // ------------------------------------------------------------------ layout
@@ -74,14 +169,17 @@ namespace YapiLabCadTools.UI
             Text = Texts.WindowTitle;
             StartPosition = FormStartPosition.CenterScreen;
 
-            // AutoCAD hosts the modeless dialog in a per-monitor-DPI-aware process; without
-            // an explicit DPI AutoScaleMode the form keeps its 96-DPI design size on screens
-            // above 100% scaling, so it opens visibly smaller until the user resizes it.
-            AutoScaleMode = AutoScaleMode.Dpi;
-            AutoScaleDimensions = new SizeF(96F, 96F);
+            // Deliberately no AutoScaleMode.Dpi here. AutoCAD 2027 is itself a modern,
+            // per-monitor-v2 DPI-aware host, which already auto-scales fonts/controls on its
+            // own; layering WinForms' legacy AutoScaleMode.Dpi on top of that competes with it
+            // and rescales our explicitly computed Size a second time (this is what actually
+            // caused the window to keep coming out oversized / spilling off-screen — not a
+            // one-off bug in the sizing math, but two DPI-scaling systems fighting each other).
+            // All sizing below is computed once, in real screen pixels, with nothing left to
+            // rescale it afterward.
+            AutoScaleMode = AutoScaleMode.None;
 
-            Size = new Size(940, 760);
-            MinimumSize = new Size(860, 640);
+            MinimumSize = new Size(880, 640);
             AllowDrop = true;
             KeyPreview = true;
             Theme.Apply(this);
@@ -90,23 +188,75 @@ namespace YapiLabCadTools.UI
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 1,
-                RowCount = 4,
+                RowCount = 3,
                 BackColor = Theme.Background,
                 Padding = new Padding(0)
             };
+            // THE critical style. Without an explicit Percent width the single column is
+            // auto-sized, meaning it grows to the widest child's *preferred* width — and the
+            // one-line hint label prefers ~1900px. Every row then gets laid out on that
+            // phantom width, which pushed the fixed-width sidebar (and earlier, the bottom
+            // panel's right column) past the form's right edge no matter how wide the user
+            // dragged the window. This was the real cause of the "window never fits" saga.
+            // With Percent 100 the column is exactly the form's width and the hint wraps.
+            root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
             root.Controls.Add(BuildToolbar(), 0, 0);
             root.Controls.Add(BuildHint(), 0, 1);
-            root.Controls.Add(BuildGrid(), 0, 2);
-            root.Controls.Add(BuildBottomPanel(), 0, 3);
+            root.Controls.Add(BuildBody(), 0, 2);
             Controls.Add(root);
 
             DragEnter += OnDragEnter;
             DragDrop += OnDragDrop;
+        }
+
+        /// <summary>
+        /// Coordinate grid on the left (takes whatever width is left), a fixed-width sidebar
+        /// (options/preview/draw/result, stacked) on the right. A fixed sidebar width means the
+        /// draw button and result panel always have the same comfortable size regardless of the
+        /// window's overall width — unlike the previous 3-column percentage-based bottom bar,
+        /// nothing here depends on the total window width being "just right".
+        /// </summary>
+        private Control BuildBody()
+        {
+            var body = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 2,
+                RowCount = 1,
+                BackColor = Theme.Background
+            };
+            body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            body.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, SidebarWidth));
+
+            body.Controls.Add(BuildGrid(), 0, 0);
+            body.Controls.Add(BuildSidebar(), 1, 0);
+            return body;
+        }
+
+        private Control BuildSidebar()
+        {
+            var sidebar = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 4,
+                BackColor = Theme.Background,
+                Padding = new Padding(0, 0, 8, 8)
+            };
+            sidebar.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            sidebar.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            sidebar.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            sidebar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+            sidebar.Controls.Add(BuildOptionsGroup(), 0, 0);
+            sidebar.Controls.Add(BuildPreviewGroup(), 0, 1);
+            sidebar.Controls.Add(BuildDrawButton(), 0, 2);
+            sidebar.Controls.Add(BuildResultGroup(), 0, 3);
+            return sidebar;
         }
 
         private ToolStrip BuildToolbar()
@@ -221,40 +371,27 @@ namespace YapiLabCadTools.UI
             return _grid;
         }
 
-        private Control BuildBottomPanel()
-        {
-            var bottom = new TableLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                AutoSize = true,
-                ColumnCount = 3,
-                BackColor = Theme.Background,
-                Padding = new Padding(8)
-            };
-            bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 38));
-            bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 32));
-            bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
-
-            bottom.Controls.Add(BuildOptionsGroup(), 0, 0);
-            bottom.Controls.Add(BuildPreviewGroup(), 1, 0);
-            bottom.Controls.Add(BuildActionPanel(), 2, 0);
-            return bottom;
-        }
-
         private GroupBox BuildOptionsGroup()
         {
             var group = new GroupBox
             {
                 Text = Texts.OptionsTitle,
                 Dock = DockStyle.Fill,
-                Height = 230,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 Padding = new Padding(10, 6, 10, 6)
             };
             Theme.StyleGroup(group);
 
+            // Each checkbox gets its own full-width row (spanning both columns); only the three
+            // label/control pairs (marker symbol, layer name, text height) use the two columns
+            // side by side. A single narrow sidebar column has no room for the old "two
+            // checkboxes side by side" layout without wrapping text awkwardly.
             var layout = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 ColumnCount = 2,
                 RowCount = 7,
                 Font = Theme.BaseFont,
@@ -262,6 +399,10 @@ namespace YapiLabCadTools.UI
             };
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
+            for (int i = 0; i < 7; i++)
+            {
+                layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            }
 
             _closeCheck = MakeCheck(Texts.OptionClose, true);
             _numbersCheck = MakeCheck(Texts.OptionPointNumbers, true);
@@ -295,15 +436,19 @@ namespace YapiLabCadTools.UI
             };
 
             layout.Controls.Add(_closeCheck, 0, 0);
-            layout.Controls.Add(_numbersCheck, 1, 0);
-            layout.Controls.Add(_summaryCheck, 0, 1);
-            layout.Controls.Add(_zoomCheck, 1, 1);
-            layout.Controls.Add(_markersCheck, 0, 2);
-            layout.Controls.Add(_symbolCombo, 1, 2);
-            layout.Controls.Add(_layerCheck, 0, 3);
-            layout.Controls.Add(_layerNameBox, 1, 3);
-            layout.Controls.Add(MakeOptionLabel(Texts.TextHeightLabel), 0, 4);
-            layout.Controls.Add(_textHeightBox, 1, 4);
+            layout.SetColumnSpan(_closeCheck, 2);
+            layout.Controls.Add(_numbersCheck, 0, 1);
+            layout.SetColumnSpan(_numbersCheck, 2);
+            layout.Controls.Add(_summaryCheck, 0, 2);
+            layout.SetColumnSpan(_summaryCheck, 2);
+            layout.Controls.Add(_zoomCheck, 0, 3);
+            layout.SetColumnSpan(_zoomCheck, 2);
+            layout.Controls.Add(_markersCheck, 0, 4);
+            layout.Controls.Add(_symbolCombo, 1, 4);
+            layout.Controls.Add(_layerCheck, 0, 5);
+            layout.Controls.Add(_layerNameBox, 1, 5);
+            layout.Controls.Add(MakeOptionLabel(Texts.TextHeightLabel), 0, 6);
+            layout.Controls.Add(_textHeightBox, 1, 6);
 
             group.Controls.Add(layout);
             return group;
@@ -330,14 +475,21 @@ namespace YapiLabCadTools.UI
             {
                 Text = Texts.PreviewTitle,
                 Dock = DockStyle.Fill,
-                Height = 230,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 Padding = new Padding(10, 6, 10, 6)
             };
             Theme.StyleGroup(group);
 
+            // AutoSize (not Dock=Fill): inside an AutoSize group a docked label reports zero
+            // preferred size, collapsing the whole group to just its title. MaximumSize caps the
+            // width at what fits the fixed sidebar, so long lines (e.g. the detected-format
+            // description) wrap instead of getting clipped at the group's edge.
             _previewValues = new Label
             {
-                Dock = DockStyle.Fill,
+                AutoSize = true,
+                Dock = DockStyle.Top,
+                MaximumSize = new Size(SidebarWidth - 40, 0),
                 Font = Theme.BaseFont,
                 ForeColor = Theme.TextPrimary,
                 Text = string.Empty
@@ -346,27 +498,22 @@ namespace YapiLabCadTools.UI
             return group;
         }
 
-        private Control BuildActionPanel()
+        private Button BuildDrawButton()
         {
-            var panel = new TableLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                ColumnCount = 1,
-                RowCount = 2
-            };
-            panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-
             _drawButton = new Button
             {
                 Text = Texts.DrawButton,
                 Dock = DockStyle.Top,
                 Height = 48,
-                Margin = new Padding(4, 4, 4, 8)
+                Margin = new Padding(4, 8, 4, 8)
             };
             Theme.StylePrimaryButton(_drawButton);
             _drawButton.Click += (_, _) => DrawNow();
+            return _drawButton;
+        }
 
+        private GroupBox BuildResultGroup()
+        {
             var resultGroup = new GroupBox
             {
                 Text = Texts.ResultTitle,
@@ -383,10 +530,7 @@ namespace YapiLabCadTools.UI
                 Text = Texts.ResultIdle
             };
             resultGroup.Controls.Add(_resultLabel);
-
-            panel.Controls.Add(_drawButton, 0, 0);
-            panel.Controls.Add(resultGroup, 0, 1);
-            return panel;
+            return resultGroup;
         }
 
         // ------------------------------------------------------------ grid virtual mode
@@ -426,21 +570,32 @@ namespace YapiLabCadTools.UI
             }
 
             row.Revalidate();
-            _grid.InvalidateRow(e.RowIndex);
+            // Editing "No" can move shape boundaries for every row below it, so recompute
+            // grouping and repaint the whole grid rather than just this one row.
+            RecomputeGroups();
+            _grid.Invalidate();
             SchedulePreviewUpdate();
         }
 
         private void OnCellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
         {
-            if (e.RowIndex < 0 || e.RowIndex >= _rows.Count)
+            if (e.RowIndex < 0 || e.RowIndex >= _rows.Count || e.CellStyle is null)
             {
                 return;
             }
 
-            if (_rows[e.RowIndex].Error is not null && e.CellStyle is not null)
+            if (_rows[e.RowIndex].Error is not null)
             {
                 e.CellStyle.BackColor = Theme.ErrorBackground;
                 e.CellStyle.ForeColor = Theme.ErrorText;
+                return;
+            }
+
+            // Shade alternate detected shapes (e.g. building footprints after a parcel
+            // boundary) so a multi-shape paste is visible before drawing, not a surprise after.
+            if (e.RowIndex < _groupIndexes.Length && _groupIndexes[e.RowIndex] % 2 == 1)
+            {
+                e.CellStyle.BackColor = Theme.GroupBandBackground;
             }
         }
 
@@ -494,6 +649,15 @@ namespace YapiLabCadTools.UI
         /// <summary>Parses raw text on a background thread and fills the grid.</summary>
         private async void LoadFromText(string text)
         {
+            // A TKGM "parsel sorgu" GeoJSON export (or any Polygon/MultiPolygon FeatureCollection)
+            // gets converted into the same tabular "No Enlem Boylam" text a manual paste would
+            // produce, so the rest of the pipeline — parsing, UTM conversion, shape grouping,
+            // undo, format re-detection — handles it with no special-casing beyond this line.
+            if (GeoJsonParcelReader.TryConvert(text, out string converted))
+            {
+                text = converted;
+            }
+
             _rawText = text;
             ColumnLayout layout = SelectedLayoutOverride();
             UseWaitCursor = true;
@@ -592,10 +756,16 @@ namespace YapiLabCadTools.UI
 
         private void RefreshGrid()
         {
+            RecomputeGroups();
             _grid.CancelEdit();
             _grid.ClearSelection();
             _grid.RowCount = _rows.Count;
             _grid.Invalidate();
+        }
+
+        private void RecomputeGroups()
+        {
+            _groupIndexes = PointGrouping.AssignGroupIndexes(_rows.Select(r => r.No).ToList());
         }
 
         // -------------------------------------------------------------------- undo
@@ -635,52 +805,81 @@ namespace YapiLabCadTools.UI
 
         private void UpdatePreview()
         {
-            List<CoordinatePoint> points = ValidPoints();
+            List<List<CoordinatePoint>> groups = ValidPointGroups();
+            List<CoordinatePoint> allPoints = groups.SelectMany(g => g).ToList();
             int errorCount = _rows.Count(r => !r.IsValid);
-            GeometryStats stats = PolygonMath.Compute(points, _closeCheck.Checked);
 
-            string bounds = points.Count == 0
+            // The bounding box covers everything (order-independent), but area/perimeter are
+            // only meaningful for one ring, so those come from the primary (largest) shape —
+            // the same shape the draw step will report as the parcel boundary.
+            List<CoordinatePoint> primary = groups.Count == 0
+                ? new List<CoordinatePoint>()
+                : groups.OrderByDescending(g => g.Count).First();
+
+            GeometryStats bbox = PolygonMath.Compute(allPoints, closed: false);
+            GeometryStats primaryStats = PolygonMath.Compute(primary, _closeCheck.Checked);
+
+            string bounds = allPoints.Count == 0
                 ? Texts.PreviewNone
-                : $"{NumberFormatting.Length(stats.Width)} × {NumberFormatting.Length(stats.Height)}";
+                : $"{NumberFormatting.Length(bbox.Width)} × {NumberFormatting.Length(bbox.Height)}";
 
             string format = _lastFormat is null || _lastFormat.Description.Length == 0
                 ? Texts.PreviewNone
                 : _lastFormat.Description;
 
+            string shapeCountLine = groups.Count > 1
+                ? $"\r\n{Texts.PreviewShapeCount} {groups.Count:N0}"
+                : string.Empty;
+
             _previewValues.Text =
-                $"{Texts.PreviewPointCount} {points.Count:N0}\r\n" +
-                $"{Texts.PreviewArea} {(points.Count >= 3 ? NumberFormatting.Area(stats.Area) : Texts.PreviewNone)}\r\n" +
-                $"{Texts.PreviewPerimeter} {(points.Count >= 2 ? NumberFormatting.Length(stats.Perimeter) : Texts.PreviewNone)}\r\n" +
+                $"{Texts.PreviewPointCount} {allPoints.Count:N0}\r\n" +
+                $"{Texts.PreviewArea} {(primary.Count >= 3 ? NumberFormatting.Area(primaryStats.Area) : Texts.PreviewNone)}\r\n" +
+                $"{Texts.PreviewPerimeter} {(primary.Count >= 2 ? NumberFormatting.Length(primaryStats.Perimeter) : Texts.PreviewNone)}\r\n" +
                 $"{Texts.PreviewBounds} {bounds}\r\n" +
                 $"{Texts.PreviewFormat} {format}\r\n" +
-                $"{Texts.PreviewErrors} {errorCount:N0}";
+                $"{Texts.PreviewErrors} {errorCount:N0}" +
+                shapeCountLine;
 
-            _drawButton.Text = points.Count > 0
-                ? string.Format(Texts.DrawButtonWithCount, points.Count.ToString("N0"))
+            _drawButton.Text = allPoints.Count > 0
+                ? string.Format(Texts.DrawButtonWithCount, allPoints.Count.ToString("N0"))
                 : Texts.DrawButton;
-            _drawButton.Enabled = points.Count >= 2;
+            _drawButton.Enabled = groups.Count > 0;
         }
 
-        private List<CoordinatePoint> ValidPoints()
+        /// <summary>
+        /// Valid points, split into separate shapes wherever <see cref="_groupIndexes"/> marks a
+        /// new group (see <see cref="PointGrouping"/>). Groups left with fewer than 2 usable
+        /// points after invalid rows are filtered out are dropped entirely.
+        /// </summary>
+        private List<List<CoordinatePoint>> ValidPointGroups()
         {
-            var points = new List<CoordinatePoint>(_rows.Count);
-            foreach (PointRow row in _rows)
+            var groups = new List<List<CoordinatePoint>>();
+            for (int i = 0; i < _rows.Count; i++)
             {
-                if (row.IsValid)
+                PointRow row = _rows[i];
+                if (!row.IsValid)
                 {
-                    points.Add(row.ToPoint());
+                    continue;
                 }
+
+                int groupIndex = i < _groupIndexes.Length ? _groupIndexes[i] : 0;
+                while (groups.Count <= groupIndex)
+                {
+                    groups.Add(new List<CoordinatePoint>());
+                }
+
+                groups[groupIndex].Add(row.ToPoint());
             }
 
-            return points;
+            return groups.Where(g => g.Count >= 2).ToList();
         }
 
         // --------------------------------------------------------------------- draw
 
         private void DrawNow()
         {
-            List<CoordinatePoint> points = ValidPoints();
-            if (points.Count < 2)
+            List<List<CoordinatePoint>> groups = ValidPointGroups();
+            if (groups.Count == 0)
             {
                 ShowResult(Texts.ErrorNotEnoughPoints, isError: true);
                 return;
@@ -690,20 +889,8 @@ namespace YapiLabCadTools.UI
             _drawButton.Enabled = false;
             try
             {
-                DrawResult result = _drawingService.Draw(points, options);
-                string message = result.Closed
-                    ? string.Format(
-                        Texts.ResultSuccessClosed,
-                        result.PointCount.ToString("N0"),
-                        NumberFormatting.Area(result.Area),
-                        NumberFormatting.Length(result.Perimeter),
-                        result.LayerName)
-                    : string.Format(
-                        Texts.ResultSuccessOpen,
-                        result.PointCount.ToString("N0"),
-                        NumberFormatting.Length(result.Perimeter),
-                        result.LayerName);
-                ShowResult(message, isError: false);
+                DrawResult result = _drawingService.Draw(groups, options);
+                ShowResult(BuildResultMessage(result), isError: false);
             }
             catch (Exception ex)
             {
@@ -715,6 +902,42 @@ namespace YapiLabCadTools.UI
             {
                 _drawButton.Enabled = true;
             }
+        }
+
+        private static string BuildResultMessage(DrawResult result)
+        {
+            if (result.ShapeCount <= 1)
+            {
+                return result.Closed
+                    ? string.Format(
+                        Texts.ResultSuccessClosed,
+                        result.PointCount.ToString("N0"),
+                        NumberFormatting.Area(result.Area),
+                        NumberFormatting.Length(result.Perimeter),
+                        result.LayerName)
+                    : string.Format(
+                        Texts.ResultSuccessOpen,
+                        result.PointCount.ToString("N0"),
+                        NumberFormatting.Length(result.Perimeter),
+                        result.LayerName);
+            }
+
+            return result.Closed
+                ? string.Format(
+                    Texts.ResultSuccessClosedMulti,
+                    result.PointCount.ToString("N0"),
+                    result.ShapeCount.ToString("N0"),
+                    NumberFormatting.Area(result.Area),
+                    NumberFormatting.Length(result.Perimeter),
+                    result.LayerName,
+                    result.SecondaryLayerName)
+                : string.Format(
+                    Texts.ResultSuccessOpenMulti,
+                    result.PointCount.ToString("N0"),
+                    result.ShapeCount.ToString("N0"),
+                    NumberFormatting.Length(result.Perimeter),
+                    result.LayerName,
+                    result.SecondaryLayerName);
         }
 
         private DrawOptions BuildDrawOptions() => new()
@@ -794,6 +1017,7 @@ namespace YapiLabCadTools.UI
             if (disposing)
             {
                 _previewTimer.Dispose();
+                _windowStateTimer.Dispose();
             }
 
             base.Dispose(disposing);

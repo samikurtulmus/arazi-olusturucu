@@ -20,6 +20,7 @@ namespace YapiLabCadTools.UI
         public static readonly Color ErrorText = Color.FromArgb(153, 27, 27);
         public static readonly Color SuccessText = Color.FromArgb(21, 128, 61);
         public static readonly Color GridAlternate = Color.FromArgb(249, 250, 251);
+        public static readonly Color GroupBandBackground = Color.FromArgb(237, 242, 255);
 
         public static readonly Font BaseFont = new("Segoe UI", 9.5F);
         public static readonly Font BoldFont = new("Segoe UI", 9.5F, FontStyle.Bold);

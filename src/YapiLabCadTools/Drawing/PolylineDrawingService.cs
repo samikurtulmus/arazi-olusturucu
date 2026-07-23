@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
@@ -19,6 +20,9 @@ namespace YapiLabCadTools.Drawing
     /// </summary>
     public sealed class PolylineDrawingService : IDrawingService
     {
+        /// <summary>Layer used for every shape except the primary (largest) one.</summary>
+        private const string SecondaryLayerName = "YAPI";
+
         private readonly ILayerService _layerService;
 
         public PolylineDrawingService(ILayerService layerService)
@@ -27,9 +31,9 @@ namespace YapiLabCadTools.Drawing
         }
 
         /// <inheritdoc />
-        public DrawResult Draw(IReadOnlyList<CoordinatePoint> points, DrawOptions options)
+        public DrawResult Draw(IReadOnlyList<IReadOnlyList<CoordinatePoint>> shapes, DrawOptions options)
         {
-            if (points is null || points.Count < 2)
+            if (shapes is null || shapes.Count == 0 || shapes.All(s => s.Count < 2))
             {
                 throw new InvalidOperationException("Çizim için en az 2 geçerli nokta gerekli.");
             }
@@ -38,35 +42,91 @@ namespace YapiLabCadTools.Drawing
                 ?? throw new InvalidOperationException("Açık bir çizim yok. Lütfen önce AutoCAD'de bir çizim açın.");
 
             Database db = doc.Database;
-            bool closed = options.ClosePolyline && points.Count > 2;
-            GeometryStats stats = PolygonMath.Compute(points, closed);
-            string layerName = "0";
+
+            // The shape with the most vertices is treated as the parcel boundary; any
+            // remaining shapes (building footprints, etc.) share a secondary layer so they
+            // stay visually and selectably distinct from the boundary.
+            int primaryIndex = 0;
+            for (int i = 1; i < shapes.Count; i++)
+            {
+                if (shapes[i].Count > shapes[primaryIndex].Count)
+                {
+                    primaryIndex = i;
+                }
+            }
+
+            int totalPoints = 0;
+            int shapesDrawn = 0;
+            string primaryLayer = "0";
+            string? secondaryLayer = null;
+            GeometryStats primaryStats = GeometryStats.Empty;
+            bool primaryClosed = false;
+            var allPoints = new List<CoordinatePoint>();
 
             using (doc.LockDocument())
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
-                if (options.CreateLayer && !string.IsNullOrWhiteSpace(options.LayerName))
-                {
-                    layerName = _layerService.EnsureLayer(tr, db, options.LayerName);
-                }
-
                 var space = (BlockTableRecord)tr.GetObject(db.CurrentSpaceId, OpenMode.ForWrite);
 
-                AppendPolyline(tr, space, points, closed, layerName);
-
-                if (options.DrawPointMarkers)
+                for (int i = 0; i < shapes.Count; i++)
                 {
-                    AppendPointMarkers(tr, space, points, options, layerName, db);
-                }
+                    IReadOnlyList<CoordinatePoint> points = shapes[i];
+                    if (points.Count < 2)
+                    {
+                        continue;
+                    }
 
-                if (options.DrawPointNumbers)
-                {
-                    AppendPointNumbers(tr, space, points, options, layerName);
-                }
+                    bool isPrimary = i == primaryIndex;
+                    string layerName = "0";
+                    if (options.CreateLayer)
+                    {
+                        if (isPrimary)
+                        {
+                            if (!string.IsNullOrWhiteSpace(options.LayerName))
+                            {
+                                layerName = _layerService.EnsureLayer(tr, db, options.LayerName);
+                            }
+                        }
+                        else
+                        {
+                            layerName = _layerService.EnsureLayer(tr, db, SecondaryLayerName);
+                        }
+                    }
 
-                if (options.DrawSummaryText)
-                {
-                    AppendSummaryText(tr, space, stats, closed, options, layerName);
+                    bool closed = options.ClosePolyline && points.Count > 2;
+                    GeometryStats stats = PolygonMath.Compute(points, closed);
+
+                    AppendPolyline(tr, space, points, closed, layerName);
+
+                    if (options.DrawPointMarkers)
+                    {
+                        AppendPointMarkers(tr, space, points, options, layerName, db);
+                    }
+
+                    if (options.DrawPointNumbers)
+                    {
+                        AppendPointNumbers(tr, space, points, options, layerName);
+                    }
+
+                    if (options.DrawSummaryText)
+                    {
+                        AppendSummaryText(tr, space, stats, closed, options, layerName);
+                    }
+
+                    totalPoints += points.Count;
+                    shapesDrawn++;
+                    allPoints.AddRange(points);
+
+                    if (isPrimary)
+                    {
+                        primaryLayer = layerName;
+                        primaryStats = stats;
+                        primaryClosed = closed;
+                    }
+                    else
+                    {
+                        secondaryLayer = layerName;
+                    }
                 }
 
                 tr.Commit();
@@ -74,10 +134,17 @@ namespace YapiLabCadTools.Drawing
 
             if (options.ZoomToResult)
             {
-                ZoomTo(doc.Editor, stats);
+                ZoomTo(doc.Editor, PolygonMath.Compute(allPoints, closed: false));
             }
 
-            return new DrawResult(points.Count, closed ? stats.Area : 0, stats.Perimeter, layerName, closed);
+            return new DrawResult(
+                totalPoints,
+                primaryClosed ? primaryStats.Area : 0,
+                primaryStats.Perimeter,
+                primaryLayer,
+                primaryClosed,
+                shapesDrawn,
+                secondaryLayer);
         }
 
         private static void AppendPolyline(
