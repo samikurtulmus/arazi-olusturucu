@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Autodesk autoloader manifest. When the YapiLabCadTools.bundle folder (this file plus
+  Contents\YapiLabCadTools.dll) sits in %AppData%\Autodesk\ApplicationPlugins, every
+  AutoCAD 2025-2027 session loads the plugin automatically at startup - no NETLOAD needed.
+-->
+<ApplicationPackage
+    SchemaVersion="1.0"
+    AutodeskProduct="AutoCAD"
+    ProductType="Application"
+    Name="YapiLab CAD Tools"
+    AppVersion="1.0.0"
+    Description="Koordinat listelerinden ve TKGM parsel sorgu JSON çıktılarından tek tıkla parsel çizimi."
+    Author="YapıLab"
+    ProductCode="{8F4E2C1A-7B3D-4A9E-9C5F-2D6E8A0B1C3D}"
+    UpgradeCode="{5A1B3C7D-9E2F-4680-B4A8-6C0D2E4F8A1B}">
+  <CompanyDetails Name="YapıLab" />
+  <Components Description="Ana eklenti">
+    <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R25.0" SeriesMax="R26.0" />
+    <ComponentEntry
+        AppName="YapiLabCadTools"
+        ModuleName="./Contents/YapiLabCadTools.dll"
+        AppDescription="YapıLab koordinattan çizim penceresi (YAPILAB / YL komutları)"
+        LoadOnAutoCADStartup="True">
+      <Commands GroupName="YAPILAB_CMDS">
+        <Command Global="YAPILAB" Local="YAPILAB" />
+        <Command Global="YL" Local="YL" />
+      </Commands>
+    </ComponentEntry>
+  </Components>
+</ApplicationPackage>
