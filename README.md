@@ -8,38 +8,34 @@ Elinizdeki koordinat listesini (Excel, tapu/kadastro çıktısı, TXT, CSV — h
 
 ---
 
-## 📥 Kurulum (derleme gerekmez)
+## 📥 Kurulum — tek tık
 
-Bu bölüm hiç kod bilmeyen, sadece AutoCAD kullanan mimar/mühendis arkadaşlar için yazıldı. İki dakika sürer ve AutoCAD her açıldığında eklenti **kendiliğinden** yüklenir — `NETLOAD`, `APPLOAD` gibi komutlarla uğraşmazsınız.
+AutoCAD **2025, 2026 veya 2027** kullanıyorsanız başka hiçbir şey kurmanız gerekmez.
 
-### 1) ZIP paketini indirin
+### 1) Kurulum dosyasını indirin
 
-**[⬇ YapiLabCadTools.zip indir](../../releases/latest/download/YapiLabCadTools.zip)**
+**[⬇ AraziOlusturucu-Setup.exe indir](../../releases/latest/download/AraziOlusturucu-Setup.exe)**
 
-(Bu link her zaman en güncel sürümü indirir. Alternatif olarak [Releases](../../releases) sayfasından da indirebilirsiniz.)
+### 2) Çift tıklayın
 
-> **Windows uyarısı çıkarsa:** İndirilen ZIP'e sağ tıklayıp **Özellikler**'i açın, alt kısımda "Bu dosya başka bir bilgisayardan geldi, engellemeyi kaldır" gibi bir kutu varsa işaretleyip **Tamam**'a basın. Bu, internetten indirilen dosyalar için Windows'un standart bir uyarısıdır, dosyayla ilgili bir sorun değildir.
+Kurulum dosyasını çalıştırın. Kurulum klasörü seçmeniz, ZIP açmanız veya dosya kopyalamanız gerekmez.
 
-### 2) Klasörü yerine kopyalayın
+### 3) AutoCAD'i açın
 
-1. ZIP'i açın — içinden `YapiLabCadTools.bundle` adlı bir klasör çıkacak.
-2. Windows'ta adres çubuğuna `%AppData%\Autodesk\ApplicationPlugins` yazıp **Enter**'a basın (klasör yoksa oluşturun).
-3. `YapiLabCadTools.bundle` klasörünü olduğu gibi oraya kopyalayın.
-
-### 3) AutoCAD'i açın — bitti
-
-AutoCAD'i (yeniden) başlatın. Eklenti otomatik yüklenir; komut satırında "YapıLab CAD Tools yüklendi" mesajını görürsünüz. Pencereyi açmak için:
+AutoCAD açıksa kapatıp yeniden açın. Komut satırına:
 
 ```
-YAPILAB        (kısayolu: YL)
+YL
 ```
 
-**Kaldırmak isterseniz:** aynı `ApplicationPlugins` klasöründeki `YapiLabCadTools.bundle` klasörünü silmeniz yeterli.
+yazın. Arazi Oluşturucu açılır.
+
+> Windows ilk indirmede SmartScreen uyarısı gösterebilir. Uygulama henüz ticari kod imzalama sertifikasıyla imzalanmadığı için bu normaldir.
 
 <details>
-<summary>Alternatif: tek DLL ile elle yükleme (NETLOAD)</summary>
+<summary>ZIP ile elle kurulum</summary>
 
-Otomatik yükleme istemiyorsanız [Releases](../../releases) sayfasından `YapiLabCadTools.dll` dosyasını indirin, AutoCAD'de `NETLOAD` komutuyla seçin ve `YAPILAB` yazın. Bu yöntemde DLL'i her AutoCAD açılışında yeniden yüklemeniz gerekir (ya da `APPLOAD` → Startup Suite'e ekleyebilirsiniz).
+İsterseniz Releases sayfasındaki `YapiLabCadTools.zip` paketini açıp `YapiLabCadTools.bundle` klasörünü `%AppData%\Autodesk\ApplicationPlugins` altına kopyalayabilirsiniz.
 
 </details>
 
