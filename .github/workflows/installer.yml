@@ -3,6 +3,8 @@ name: Build One-Click Installer
 on:
   workflow_dispatch:
   push:
+    branches:
+      - master
     tags:
       - 'v*'
 
@@ -49,7 +51,16 @@ jobs:
           name: AraziOlusturucu-Setup
           path: dist/AraziOlusturucu-Setup.exe
 
-      - name: Add installer to GitHub Release
+      - name: Publish v1.1.1 installer
+        if: github.ref == 'refs/heads/master'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.1.1
+          name: Arazi Oluşturucu v1.1.1
+          body: "Tek tık Windows kurulumu eklendi. AutoCAD 2025, 2026 ve 2027 desteklenir."
+          files: dist/AraziOlusturucu-Setup.exe
+
+      - name: Add installer to tagged GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
