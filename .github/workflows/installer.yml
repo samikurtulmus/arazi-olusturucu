@@ -1,0 +1,56 @@
+name: Build One-Click Installer
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build plugin
+        shell: pwsh
+        run: dotnet build src/YapiLabCadTools/YapiLabCadTools.csproj -c Release
+
+      - name: Prepare installer payload
+        shell: pwsh
+        run: |
+          $payload = "installer/payload/YapiLabCadTools.bundle"
+          New-Item -ItemType Directory -Force "$payload/Contents" | Out-Null
+          Copy-Item "bundle/YapiLabCadTools.bundle/PackageContents.xml" "$payload/PackageContents.xml"
+          Copy-Item "src/YapiLabCadTools/bin/Release/YapiLabCadTools.dll" "$payload/Contents/YapiLabCadTools.dll"
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "installer/AraziOlusturucu.iss"
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AraziOlusturucu-Setup
+          path: dist/AraziOlusturucu-Setup.exe
+
+      - name: Add installer to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/AraziOlusturucu-Setup.exe
